@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -78,11 +80,81 @@ func compressionStep(curStr string, comprStr string, prevS string) string {
 }
 
 func decompress(str string) string {
-	for i := range str {
-		var s = string(str[i])
-		if s == "a" {
-			fmt.Println(s)
+	var (
+		state           int    = 0
+		number          int    = 0
+		currentStr      string = ""
+		decompressedStr string = ""
+	)
+
+	for _, v := range str {
+		var s = string(v)
+
+		switch state {
+		case 1:
+			if s == "#" {
+				state = 1
+				decompressedStr = decompressedStr + currentStr
+				currentStr = s
+			} else {
+				validateAndProcessNumberStep(&state, &number, &currentStr, &decompressedStr, v, s)
+			}
+			break
+		case 2:
+			if s == "#" {
+				state = 3
+				currentStr = currentStr + s
+			} else {
+				validateAndProcessNumberStep(&state, &number, &currentStr, &decompressedStr, v, s)
+			}
+			break
+		case 3:
+			decompressedStr = decompressedStr + strings.Repeat(s, number)
+			setStateZeroStep(&state, &number, &currentStr)
+			break
+		default:
+			firstSpecialCharOrDefaultStep(&state, &currentStr, &decompressedStr, s)
+			break
 		}
 	}
-	return str
+	decompressedStr = decompressedStr + currentStr
+	return decompressedStr
+}
+
+func firstSpecialCharOrDefaultStep(state *int, curStr *string, decomprStr *string, s string) {
+	if s == "#" {
+		*state = 1
+		*curStr = s
+	} else {
+		*decomprStr = *decomprStr + s
+	}
+}
+
+func validateAndProcessNumberStep(state *int, number *int, curStr *string, decomprStr *string, v rune, s string) {
+	if unicode.IsDigit(v) {
+		n, err := strconv.Atoi(s)
+		if err == nil {
+			*state = 2
+			*number = *number * 10
+			*number = *number + n
+			*curStr = *curStr + s
+		} else {
+			completeCurrentStep(curStr, decomprStr, s)
+			setStateZeroStep(state, number, curStr)
+		}
+	} else {
+		completeCurrentStep(curStr, decomprStr, s)
+		setStateZeroStep(state, number, curStr)
+	}
+}
+
+func completeCurrentStep(curStr *string, decomprStr *string, s string) {
+	*curStr = *curStr + s
+	*decomprStr = *decomprStr + *curStr
+}
+
+func setStateZeroStep(state *int, number *int, curStr *string) {
+	*state = 0
+	*number = 0
+	*curStr = ""
 }
